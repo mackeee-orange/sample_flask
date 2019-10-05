@@ -1,0 +1,12 @@
+# dockerコンテナに入れたくない物をここに書いていく
+.docker
+.circleci
+.pytest_cache
+.env
+.env.sample
+.gitignore
+.python-version
+docker-compose.yml
+docker-compose.*.yml
+README.md
+

@@ -1,0 +1,81 @@
+version: "3.3"
+
+networks:
+  nginx_network:
+    driver: bridge
+
+volumes:
+  flask_socket:
+    driver: local
+
+
+services:
+  app:  # 実際のWebアプリケーションを起動するコンテナ
+    restart: always
+    build: .
+    command: gunicorn run:app --config guniconf.py
+    volumes:
+      - flask_socket:/var/www/app/tmp/sockets
+      - .:/var/www/app
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PASSWORD: password
+      POSTGRES_NAME: db_development
+      POSTGRES_
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+
+  worker:  # ジョブを走らせるコンテナ
+    build: .
+    command: ./run_celery.sh
+    depends_on:
+      - app
+      - redis
+    volumes:
+      - .:/var/www/app
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+
+  redis:  # ジョブを非同期で動かすために必要
+    image: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - .docker/redis/data:/data
+
+  nginx:  # プロキシサーバー
+    restart: always
+    build:
+      context: .docker/nginx
+      dockerfile: Dockerfile
+    ports:
+      - 8000:80
+    depends_on:
+      - app
+    volumes:
+      - flask_socket:/var/www/app/tmp/sockets
+      - .docker/nginx/development.conf:/etc/nginx/conf.d/development.conf
+    networks:
+      - nginx_network
+
+  db:
+    restart: always
+    image: postgres:10.4
+    ports:
+      - 5432:5432
+    volumes:
+      - .docker/db/data:/var/lib/postgresql/data
+      - .docker/db/initializers:/docker-entrypoint-initdb.d
+    environment:
+      POSTGRES_USER: deploy
+      POSTGRES_PASSWORD: postgres
+
